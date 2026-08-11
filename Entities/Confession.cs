@@ -14,7 +14,7 @@ public class Confession
     public University University { get; set; } = null!;
 
     public int CategoryId { get; set; } // FK
-    // public Category Category { get; set; } = null!;
+    public Category Category { get; set; } = null!;
 
     [Required]
     public string Body { get; set; } = string.Empty;
