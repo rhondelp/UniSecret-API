@@ -39,8 +39,8 @@ public class User
 
     // Navigation Properties for related models
     public ICollection<Confession> Confessions { get; set; } = new List<Confession>();
-    // public ICollection<Comment> Comments { get; set; } = new List<Comment>();
-    // public ICollection<Like> Likes { get; set; } = new List<Like>();
-    // public ICollection<SavedPost> SavedPosts { get; set; } = new List<SavedPost>();
-    // public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<Comment> Comments { get; set; } = new List<Comment>();
+    public ICollection<Like> Likes { get; set; } = new List<Like>();
+    public ICollection<SavedPost> SavedPosts { get; set; } = new List<SavedPost>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }

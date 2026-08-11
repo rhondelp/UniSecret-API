@@ -34,6 +34,6 @@ public class Confession
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties
-    // public ICollection<ConfessionHashtag> ConfessionHashtags { get; set; } = new List<ConfessionHashtag>();
-    // public ICollection<Comment> Comments { get; set; } = new List<Comment>();
+    public ICollection<ConfessionHashtag> ConfessionHashtags { get; set; } = new List<ConfessionHashtag>();
+    public ICollection<Comment> Comments { get; set; } = new List<Comment>();
 }
