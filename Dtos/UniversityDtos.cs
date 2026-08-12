@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using UniSecretApi.Enums;
 
+namespace UniSecretApi.Dtos;
+
 //DTO for returning university details to clients
 public record UniversityDto(
     int Id,
@@ -11,7 +13,7 @@ public record UniversityDto(
     DateTime CreatedAt
 );
 
-public record CreartUniversityDto(
+public record CreateUniversityDto(
     [Required] [StringLength(150)] string Name,
     [Required] [StringLength(100)] string Domain,
     string? LogoUrl
