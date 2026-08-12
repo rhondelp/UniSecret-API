@@ -24,7 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<ModerationLog> ModerationLogs { get; set; } = null!;
 
-    protected override OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
@@ -92,5 +92,30 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(m => m.AdminId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // 7. Store Enums as Strings in Database
+        modelBuilder.Entity<University>()
+            .Property(u => u.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Role)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Confession>()
+            .Property(c => c.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Report>()
+            .Property(r => r.Reason)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Report>()
+            .Property(r => r.Status)
+            .HasConversion<string>();
     }
 }
