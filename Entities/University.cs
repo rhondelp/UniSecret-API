@@ -21,7 +21,7 @@ public class University
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public DateTime CreateAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
 
     // Navigation property: One university has many users
