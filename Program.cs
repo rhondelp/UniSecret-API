@@ -8,22 +8,13 @@ using UniSecretApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ============================================================
-// 1. Add Controllers
-// ============================================================
-
+//Add Controllers
 builder.Services.AddControllers();
 
-// ============================================================
-// 2. Add API Explorer
-// ============================================================
-
+//Add API Explorer
 builder.Services.AddEndpointsApiExplorer();
 
-// ============================================================
-// 3. Add Swagger / OpenAPI
-// ============================================================
-
+//Add Swagger / OpenAPI
 builder.Services.AddSwaggerGen(options =>
 {
     const string bearerScheme = "Bearer";
@@ -57,10 +48,7 @@ builder.Services.AddSwaggerGen(options =>
     );
 });
 
-// ============================================================
-// 4. Register PostgreSQL DbContext
-// ============================================================
-
+// Register PostgreSQL DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(
@@ -70,16 +58,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     );
 });
 
-// ============================================================
-// 5. Register Application Services
-// ============================================================
 
+// Register Application Services
 builder.Services.AddScoped<AuthService>();
 
-// ============================================================
-// 6. Configure JWT Authentication
-// ============================================================
-
+// Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 
 var secretKey = jwtSettings["Secret"]
@@ -130,22 +113,13 @@ builder.Services
             };
     });
 
-// ============================================================
-// 7. Add Authorization
-// ============================================================
-
+// Add Authorization
 builder.Services.AddAuthorization();
 
-// ============================================================
-// 8. Build Application
-// ============================================================
-
+// Building the Application
 var app = builder.Build();
 
-// ============================================================
-// 9. Configure Swagger
-// ============================================================
-
+// Configure Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -153,32 +127,17 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// ============================================================
-// 10. HTTPS Redirection
-// ============================================================
-
+// HTTPS Redirection
 app.UseHttpsRedirection();
 
-// ============================================================
-// 11. Authentication
-// ============================================================
-
+// Authentication
 app.UseAuthentication();
 
-// ============================================================
-// 12. Authorization
-// ============================================================
-
+// Authorization
 app.UseAuthorization();
 
-// ============================================================
-// 13. Map Controllers
-// ============================================================
-
+// Map Controllers
 app.MapControllers();
 
-// ============================================================
-// 14. Run Application
-// ============================================================
-
+// Run Application
 app.Run();
