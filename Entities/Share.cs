@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace UniSecretApi.Entities;
 
 public class Share

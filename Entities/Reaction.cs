@@ -10,13 +10,13 @@ public class Reaction
     public int UserId { get; set; }
     public User User { get; set; } = null!;
 
-    public int ReactableId { get; set; } // Confession or Comment ID
+    public int ReactableId { get; set; }
 
     [Required]
     [MaxLength(20)]
     public string ReactableType { get; set; } = string.Empty; // "Confession" or "Comment"
 
-    public ReactionType Type { get; set; } = ReactionType.Like;
+    public ReactionType Type { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
