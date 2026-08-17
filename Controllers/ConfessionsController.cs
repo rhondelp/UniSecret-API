@@ -33,6 +33,9 @@ public class ConfessionsController : ControllerBase
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _ = int.TryParse(userIdClaim, out var currentUserId);
+
         var query = _context.Confessions
             .AsNoTracking()
             .Where(c => c.Status == ConfessionStatus.Approved);
@@ -65,7 +68,13 @@ public class ConfessionsController : ControllerBase
                 c.IsAnonymous ? "anonymous" : c.User.Username,
                 c.Status,
                 c.ScheduledAt,
-                c.CreatedAt
+                c.CreatedAt,
+                // Calculate total likes for this confession
+                _context.Likes.Count(l => l.LikeableId == c.Id && l.LikeableType == "Confession"),
+                // Check if current user liked it (only if logged in)
+                currentUserId > 0 && _context.Likes.Any(l => l.UserId == currentUserId && l.LikeableId == c.Id && l.LikeableType == "Confession"),
+                // Check if current user saved it (only if logged in)
+                currentUserId > 0 && _context.SavedPosts.Any(s => s.UserId == currentUserId && s.ConfessionId == c.Id)
             ))
             .ToListAsync(cancellationToken);
 
@@ -219,7 +228,7 @@ public class ConfessionsController : ControllerBase
         var user = await _context.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.Status })
+            .Select(u => new { u.Status, u.UniversityId })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (user is null)
@@ -232,9 +241,12 @@ public class ConfessionsController : ControllerBase
             return Forbid();
         }
 
+        // Use user's registered UniversityId if not supplied in DTO or if zero
+        var targetUniversityId = dto.UniversityId > 0 ? dto.UniversityId : user.UniversityId;
+
         var universityExists = await _context.Universities
             .AsNoTracking()
-            .AnyAsync(u => u.Id == dto.UniversityId, cancellationToken);
+            .AnyAsync(u => u.Id == targetUniversityId, cancellationToken);
 
         if (!universityExists)
         {
@@ -255,7 +267,7 @@ public class ConfessionsController : ControllerBase
         var confession = new Confession
         {
             UserId = userId,
-            UniversityId = dto.UniversityId,
+            UniversityId = targetUniversityId,
             CategoryId = dto.CategoryId,
             Body = dto.Body,
             IsAnonymous = dto.IsAnonymous,
