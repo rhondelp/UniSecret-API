@@ -28,9 +28,12 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // 1. Configure Composite Primary Key for ConfessionHashtag (Pivot Table)
         modelBuilder.Entity<ConfessionHashtag>()
-            .HasKey(ch => new { ch.ConfessionId, ch.HashtagId });
+            .HasKey(ch => new
+            {
+                ch.ConfessionId,
+                ch.HashtagId
+            });
 
         modelBuilder.Entity<ConfessionHashtag>()
             .HasOne(ch => ch.Confession)
@@ -42,7 +45,6 @@ public class AppDbContext : DbContext
             .WithMany(h => h.ConfessionHashtags)
             .HasForeignKey(ch => ch.HashtagId);
 
-        // 2. Configure Confession Relationships & Prevent Multiple Cascade Paths
         modelBuilder.Entity<Confession>()
             .HasOne(c => c.User)
             .WithMany(u => u.Confessions)
@@ -55,7 +57,10 @@ public class AppDbContext : DbContext
             .HasForeignKey(c => c.ApprovedById)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // 3. Configure Unique Constraints
+        // ------------------------------------------------------------
+        // User indexes
+        // ------------------------------------------------------------
+
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Username)
             .IsUnique();
@@ -63,6 +68,10 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
             .IsUnique();
+
+        // ------------------------------------------------------------
+        // Category / hashtag indexes
+        // ------------------------------------------------------------
 
         modelBuilder.Entity<Category>()
             .HasIndex(c => c.Slug)
@@ -72,28 +81,65 @@ public class AppDbContext : DbContext
             .HasIndex(h => h.Tag)
             .IsUnique();
 
-        // 4. Configure Comment Parent-Child (Threaded Replies)
+        // ------------------------------------------------------------
+        // High-traffic confession feed indexes
+        // ------------------------------------------------------------
+        //
+        // The public feed filters by Status and optionally
+        // UniversityId, then sorts by CreatedAt.
+        //
+        // These indexes support those access patterns.
+        // ------------------------------------------------------------
+
+        modelBuilder.Entity<Confession>()
+            .HasIndex(c => new
+            {
+                c.Status,
+                c.CreatedAt
+            });
+
+        modelBuilder.Entity<Confession>()
+            .HasIndex(c => new
+            {
+                c.UniversityId,
+                c.Status,
+                c.CreatedAt
+            });
+
+        // ------------------------------------------------------------
+        // Comment hierarchy
+        // ------------------------------------------------------------
+
         modelBuilder.Entity<Comment>()
             .HasOne(c => c.Parent)
             .WithMany(c => c.Replies)
             .HasForeignKey(c => c.ParentId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // 5. Configure Report Foreign Keys
+        // ------------------------------------------------------------
+        // Report relationships
+        // ------------------------------------------------------------
+
         modelBuilder.Entity<Report>()
             .HasOne(r => r.Reporter)
             .WithMany()
             .HasForeignKey(r => r.ReporterId)
             .OnDelete(DeleteBehavior.Restrict);
-            
-        // 6. Configure ModerationLog Foreign Keys
+
+        // ------------------------------------------------------------
+        // Moderation log
+        // ------------------------------------------------------------
+
         modelBuilder.Entity<ModerationLog>()
             .HasOne(m => m.Admin)
             .WithMany()
             .HasForeignKey(m => m.AdminId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // 7. Store Enums as Strings in Database
+        // ------------------------------------------------------------
+        // Enum storage
+        // ------------------------------------------------------------
+
         modelBuilder.Entity<University>()
             .Property(u => u.Status)
             .HasConversion<string>();
