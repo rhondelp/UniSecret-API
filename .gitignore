@@ -1,3 +1,77 @@
-﻿bin/
+﻿# ============================================
+# .NET / ASP.NET Core
+# ============================================
+
+bin/
 obj/
+.vs/
+.vscode/
+
+# User-specific Visual Studio files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ============================================
+# Environment / Secrets
+# ============================================
+
 .env
+.env.*
+!.env.example
+
+# ASP.NET Core local configuration
+appsettings.Local.json
+appsettings.Development.local.json
+
+# User secrets
+secrets.json
+
+# ============================================
+# Logs
+# ============================================
+
+*.log
+logs/
+Log/
+
+# ============================================
+# Test / Coverage
+# ============================================
+
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# ============================================
+# OS files
+# ============================================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ============================================
+# Docker
+# ============================================
+
+docker-compose.override.yml
+
+# ============================================
+# Generated / temporary files
+# ============================================
+
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# ============================================
+# Local databases
+# ============================================
+
+*.db
+*.db-shm
+*.db-wal
