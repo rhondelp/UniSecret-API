@@ -75,6 +75,72 @@ public class ConfessionsController : ControllerBase
         return Ok(new PagedResult<ConfessionDto>(confessions, page, pageSize, totalCount, totalPages));
     }
 
+    // GET: api/v1/confessions/search?q=exam&universityId=1&categoryId=2&tag=midterms&page=1&pageSize=20
+    [HttpGet("search")]
+    public async Task<ActionResult<PagedResult<ConfessionDto>>> SearchConfessions(
+        [FromQuery] ConfessionSearchQueryDto queryDto,
+        CancellationToken cancellationToken = default)
+    {
+        var page = Math.Max(queryDto.Page, 1);
+        var pageSize = Math.Clamp(queryDto.PageSize, 1, 100);
+
+        var query = _context.Confessions
+            .AsNoTracking()
+            .Where(c => c.Status == ConfessionStatus.Approved);
+
+        // 1. PostgreSQL ILike for optimized case-insensitive text search
+        if (!string.IsNullOrWhiteSpace(queryDto.Q))
+        {
+            var searchTerm = queryDto.Q.Trim();
+            query = query.Where(c => EF.Functions.ILike(c.Body, $"%{searchTerm}%"));
+        }
+
+        // 2. Filter by University
+        if (queryDto.UniversityId.HasValue)
+        {
+            query = query.Where(c => c.UniversityId == queryDto.UniversityId.Value);
+        }
+
+        // 3. Filter by Category
+        if (queryDto.CategoryId.HasValue)
+        {
+            query = query.Where(c => c.CategoryId == queryDto.CategoryId.Value);
+        }
+
+        // 4. Filter by Hashtag
+        if (!string.IsNullOrWhiteSpace(queryDto.Tag))
+        {
+            var normalizedTag = queryDto.Tag.Trim().ToLowerInvariant().TrimStart('#');
+            query = query.Where(c => c.ConfessionHashtags.Any(ch => ch.Hashtag.Tag == normalizedTag));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var confessions = await query
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new ConfessionDto(
+                c.Id,
+                c.UniversityId,
+                c.CategoryId,
+                c.Category.Name,
+                c.Body,
+                c.IsAnonymous,
+                c.IsAnonymous ? "Anonymous" : c.User.Name,
+                c.IsAnonymous ? "anonymous" : c.User.Username,
+                c.Status,
+                c.ScheduledAt,
+                c.CreatedAt
+            ))
+            .ToListAsync(cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return Ok(new PagedResult<ConfessionDto>(confessions, page, pageSize, totalCount, totalPages));
+    }
+
     // GET: api/v1/confessions/5
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ConfessionDto>> GetConfession(
@@ -200,9 +266,6 @@ public class ConfessionsController : ControllerBase
             UpdatedAt = now
         };
 
-        // --------------------------------------------------------
-        // Extract and process Hashtags (#tag)
-        // --------------------------------------------------------
         var matches = Regex.Matches(dto.Body, @"#([a-zA-Z0-9_]+)");
         var tags = matches
             .Select(m => m.Groups[1].Value.ToLowerInvariant())

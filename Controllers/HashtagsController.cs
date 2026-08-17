@@ -17,6 +17,7 @@ public class HashtagsController : ControllerBase
     }
 
     // GET: api/v1/hashtags/trending?limit=10
+
     [HttpGet("trending")]
     public async Task<ActionResult<IEnumerable<HashtagDto>>> GetTrendingHashtags(
         [FromQuery] int limit = 10,
@@ -26,15 +27,15 @@ public class HashtagsController : ControllerBase
 
         var trending = await _context.Hashtags
             .AsNoTracking()
+            .Where(h => h.ConfessionHashtags.Count > 0)
+            .OrderByDescending(h => h.ConfessionHashtags.Count)
+            .ThenBy(h => h.Tag)
+            .Take(limit)
             .Select(h => new HashtagDto(
                 h.Id,
                 h.Tag,
                 h.ConfessionHashtags.Count
             ))
-            .Where(h => h.UsageCount > 0)
-            .OrderByDescending(h => h.UsageCount)
-            .ThenBy(h => h.Tag)
-            .Take(limit)
             .ToListAsync(cancellationToken);
 
         return Ok(trending);
