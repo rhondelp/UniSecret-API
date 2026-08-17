@@ -1,5 +1,6 @@
 // File: Controllers/ConfessionsController.cs
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -198,6 +199,41 @@ public class ConfessionsController : ControllerBase
             CreatedAt = now,
             UpdatedAt = now
         };
+
+        // --------------------------------------------------------
+        // Extract and process Hashtags (#tag)
+        // --------------------------------------------------------
+        var matches = Regex.Matches(dto.Body, @"#([a-zA-Z0-9_]+)");
+        var tags = matches
+            .Select(m => m.Groups[1].Value.ToLowerInvariant())
+            .Distinct()
+            .Where(t => t.Length <= 50)
+            .ToList();
+
+        if (tags.Count > 0)
+        {
+            var existingHashtags = await _context.Hashtags
+                .Where(h => tags.Contains(h.Tag))
+                .ToListAsync(cancellationToken);
+
+            var existingTagsMap = existingHashtags.ToDictionary(h => h.Tag, h => h);
+
+            foreach (var tag in tags)
+            {
+                if (!existingTagsMap.TryGetValue(tag, out var hashtag))
+                {
+                    hashtag = new Hashtag { Tag = tag };
+                    _context.Hashtags.Add(hashtag);
+                    existingTagsMap[tag] = hashtag;
+                }
+
+                confession.ConfessionHashtags.Add(new ConfessionHashtag
+                {
+                    Confession = confession,
+                    Hashtag = hashtag
+                });
+            }
+        }
 
         _context.Confessions.Add(confession);
         await _context.SaveChangesAsync(cancellationToken);
