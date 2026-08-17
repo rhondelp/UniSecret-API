@@ -1,3 +1,4 @@
+// File: Controllers/ConfessionsController.cs
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,15 +21,15 @@ public class ConfessionsController : ControllerBase
         _context = context;
     }
 
-    // GET: api/v1/confessions?universityId=1&page=1&pageSize=20
+    // GET: api/v1/confessions?universityId=1&categoryId=2&page=1&pageSize=20
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ConfessionDto>>> GetConfessions(
+    public async Task<ActionResult<PagedResult<ConfessionDto>>> GetConfessions(
         [FromQuery] int? universityId,
+        [FromQuery] int? categoryId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        // Prevent clients from requesting extremely large result sets.
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
@@ -38,9 +39,15 @@ public class ConfessionsController : ControllerBase
 
         if (universityId.HasValue)
         {
-            query = query.Where(
-                c => c.UniversityId == universityId.Value);
+            query = query.Where(c => c.UniversityId == universityId.Value);
         }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(c => c.CategoryId == categoryId.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
 
         var confessions = await query
             .OrderByDescending(c => c.CreatedAt)
@@ -54,19 +61,79 @@ public class ConfessionsController : ControllerBase
                 c.Category.Name,
                 c.Body,
                 c.IsAnonymous,
-                c.IsAnonymous
-                    ? "Anonymous"
-                    : c.User.Name,
-                c.IsAnonymous
-                    ? "anonymous"
-                    : c.User.Username,
+                c.IsAnonymous ? "Anonymous" : c.User.Name,
+                c.IsAnonymous ? "anonymous" : c.User.Username,
                 c.Status,
                 c.ScheduledAt,
                 c.CreatedAt
             ))
             .ToListAsync(cancellationToken);
 
-        return Ok(confessions);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return Ok(new PagedResult<ConfessionDto>(confessions, page, pageSize, totalCount, totalPages));
+    }
+
+    // GET: api/v1/confessions/5
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<ConfessionDto>> GetConfession(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var confession = await _context.Confessions
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new
+            {
+                c.Id,
+                c.UserId,
+                c.UniversityId,
+                c.CategoryId,
+                CategoryName = c.Category.Name,
+                c.Body,
+                c.IsAnonymous,
+                AuthorName = c.IsAnonymous ? "Anonymous" : c.User.Name,
+                AuthorUsername = c.IsAnonymous ? "anonymous" : c.User.Username,
+                c.Status,
+                c.ScheduledAt,
+                c.CreatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (confession is null)
+        {
+            return NotFound(new { message = $"Confession with ID {id} was not found." });
+        }
+
+        if (confession.Status != ConfessionStatus.Approved)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRoleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+
+            var isAuthor = userIdClaim != null && int.TryParse(userIdClaim, out var userId) && userId == confession.UserId;
+            var isAdmin = userRoleClaim is nameof(UserRole.Admin) or nameof(UserRole.SuperAdmin);
+
+            if (!isAuthor && !isAdmin)
+            {
+                return NotFound(new { message = $"Confession with ID {id} was not found." });
+            }
+        }
+
+        var dto = new ConfessionDto(
+            confession.Id,
+            confession.UniversityId,
+            confession.CategoryId,
+            confession.CategoryName,
+            confession.Body,
+            confession.IsAnonymous,
+            confession.AuthorName,
+            confession.AuthorUsername,
+            confession.Status,
+            confession.ScheduledAt,
+            confession.CreatedAt
+        );
+
+        return Ok(dto);
     }
 
     // POST: api/v1/confessions
@@ -76,48 +143,45 @@ public class ConfessionsController : ControllerBase
         CreateConfessionDto dto,
         CancellationToken cancellationToken = default)
     {
-        var userIdClaim =
-            User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (userIdClaim is null ||
-            !int.TryParse(userIdClaim, out var userId))
+        if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
         {
-            return Unauthorized(
-                new { message = "Invalid token claims." });
+            return Unauthorized(new { message = "Invalid token claims." });
         }
 
-        // --------------------------------------------------------
-        // Verify University
-        // --------------------------------------------------------
+        var user = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Status })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var universityExists =
-            await _context.Universities
-                .AsNoTracking()
-                .AnyAsync(
-                    u => u.Id == dto.UniversityId,
-                    cancellationToken);
+        if (user is null)
+        {
+            return Unauthorized(new { message = "User record not found." });
+        }
+
+        if (user.Status != UserStatus.Active)
+        {
+            return Forbid();
+        }
+
+        var universityExists = await _context.Universities
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == dto.UniversityId, cancellationToken);
 
         if (!universityExists)
         {
-            return BadRequest(
-                new { message = "University not found." });
+            return BadRequest(new { message = "University not found." });
         }
 
-        // --------------------------------------------------------
-        // Verify Category
-        // --------------------------------------------------------
-
-        var categoryExists =
-            await _context.Categories
-                .AsNoTracking()
-                .AnyAsync(
-                    c => c.Id == dto.CategoryId,
-                    cancellationToken);
+        var categoryExists = await _context.Categories
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == dto.CategoryId, cancellationToken);
 
         if (!categoryExists)
         {
-            return BadRequest(
-                new { message = "Category not found." });
+            return BadRequest(new { message = "Category not found." });
         }
 
         var now = DateTime.UtcNow;
@@ -136,13 +200,12 @@ public class ConfessionsController : ControllerBase
         };
 
         _context.Confessions.Add(confession);
-
         await _context.SaveChangesAsync(cancellationToken);
 
         return Ok(new
         {
-            message =
-                "Confession submitted successfully and is pending review."
+            message = "Confession submitted successfully and is pending review.",
+            id = confession.Id
         });
     }
 }
