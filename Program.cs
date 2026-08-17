@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,18 +9,22 @@ using UniSecretApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//Add Controllers
+// ------------------------------------------------------------
+// Controllers
+// ------------------------------------------------------------
+
 builder.Services.AddControllers();
 
-//Add API Explorer
+// ------------------------------------------------------------
+// API Explorer / Swagger
+// ------------------------------------------------------------
+
 builder.Services.AddEndpointsApiExplorer();
 
-//Add Swagger / OpenAPI
 builder.Services.AddSwaggerGen(options =>
 {
     const string bearerScheme = "Bearer";
 
-    // JWT Bearer authentication definition
     options.AddSecurityDefinition(
         bearerScheme,
         new OpenApiSecurityScheme
@@ -33,42 +38,105 @@ builder.Services.AddSwaggerGen(options =>
                 "Enter your JWT token.\n\n" +
                 "Example:\n" +
                 "Bearer eyJhbGciOiJIUzI1NiIs..."
-        }
-    );
+        });
 
-    // Apply Bearer authentication globally to Swagger
     options.AddSecurityRequirement(document =>
         new OpenApiSecurityRequirement
         {
             [new OpenApiSecuritySchemeReference(
                 bearerScheme,
-                document
-            )] = []
-        }
-    );
+                document)] = []
+        });
 });
 
-// Register PostgreSQL DbContext
+// ------------------------------------------------------------
+// PostgreSQL / EF Core
+// ------------------------------------------------------------
+//
+// DbContext is registered as Scoped, which is the normal lifetime
+// for ASP.NET Core web requests.
+//
+// EF Core obtains and releases database connections as needed.
+// Do not manually keep connections open across requests.
+// ------------------------------------------------------------
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString(
-            "DefaultConnection"
-        )
-    );
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptions =>
+        {
+            // Retries transient PostgreSQL failures.
+            // Keep the retry count modest so failures do not
+            // unnecessarily increase request latency.
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
 });
 
+// ------------------------------------------------------------
+// Memory Cache
+// ------------------------------------------------------------
+//
+// Useful for extremely fast local lookups.
+//
+// IMPORTANT:
+// Memory cache is instance-local. It must NOT be treated as the
+// source of truth when the API runs on multiple instances.
+// ------------------------------------------------------------
 
-// Register Application Services
+builder.Services.AddMemoryCache();
+
+// ------------------------------------------------------------
+// Distributed Redis Cache
+// ------------------------------------------------------------
+//
+// Redis allows all API instances behind NGINX to share cached data.
+//
+// Configuration example:
+//
+// "ConnectionStrings": {
+//   "Redis": "localhost:6379"
+// }
+// ------------------------------------------------------------
+
+var redisConnection =
+    builder.Configuration.GetConnectionString("Redis");
+
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+        options.InstanceName = "UniSecretApi:";
+    });
+}
+
+// ------------------------------------------------------------
+// Application Services
+// ------------------------------------------------------------
+
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<CacheService>();
 
-// Configure JWT Authentication
+// ------------------------------------------------------------
+// Health Checks
+// ------------------------------------------------------------
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>();
+
+// ------------------------------------------------------------
+// JWT Authentication
+// ------------------------------------------------------------
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 
 var secretKey = jwtSettings["Secret"]
     ?? throw new InvalidOperationException(
-        "JWT Secret is not configured."
-    );
+        "JWT Secret is not configured.");
 
 var key = Encoding.UTF8.GetBytes(secretKey);
 
@@ -86,8 +154,13 @@ builder.Services
     })
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false;
-        options.SaveToken = true;
+        // In production, HTTPS metadata should be required.
+        options.RequireHttpsMetadata =
+            !builder.Environment.IsDevelopment();
+
+        // The API does not need to store the JWT after validating it.
+        // Keeping SaveToken disabled avoids unnecessary work/state.
+        options.SaveToken = false;
 
         options.TokenValidationParameters =
             new TokenValidationParameters
@@ -113,31 +186,97 @@ builder.Services
             };
     });
 
-// Add Authorization
+// ------------------------------------------------------------
+// Authorization
+// ------------------------------------------------------------
+
 builder.Services.AddAuthorization();
 
-// Building the Application
+// ------------------------------------------------------------
+// ASP.NET Core Rate Limiting
+// ------------------------------------------------------------
+//
+// Authentication endpoints are particularly expensive because
+// password hashing is CPU-intensive.
+//
+// A fixed-window policy prevents one client from consuming excessive
+// server resources.
+//
+// The exact limits should ultimately be adjusted using load testing.
+// ------------------------------------------------------------
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter(
+        "auth",
+        limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 10;
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
+            limiterOptions.QueueLimit = 0;
+        });
+
+    options.AddFixedWindowLimiter(
+        "general",
+        limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 120;
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
+            limiterOptions.QueueLimit = 0;
+        });
+});
+
+// ------------------------------------------------------------
+// Build
+// ------------------------------------------------------------
+
 var app = builder.Build();
 
-// Configure Swagger
+// ------------------------------------------------------------
+// Swagger
+// ------------------------------------------------------------
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-
     app.UseSwaggerUI();
 }
 
-// HTTPS Redirection
+// ------------------------------------------------------------
+// HTTPS
+// ------------------------------------------------------------
+
 app.UseHttpsRedirection();
 
-// Authentication
-app.UseAuthentication();
+// ------------------------------------------------------------
+// Rate Limiting
+// ------------------------------------------------------------
 
-// Authorization
+app.UseRateLimiter();
+
+// ------------------------------------------------------------
+// Authentication / Authorization
+// ------------------------------------------------------------
+
+app.UseAuthentication();
 app.UseAuthorization();
 
-// Map Controllers
+// ------------------------------------------------------------
+// Health endpoint
+// ------------------------------------------------------------
+//
+// Used by NGINX/container orchestration/load-balancing systems
+// to determine whether this API instance is healthy.
+// ------------------------------------------------------------
+
+app.MapHealthChecks("/health");
+
+// ------------------------------------------------------------
+// Controllers
+// ------------------------------------------------------------
+
 app.MapControllers();
 
-// Run Application
 app.Run();

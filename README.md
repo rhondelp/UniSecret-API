@@ -45,6 +45,33 @@ UniSecret-API/
 │   └── AppEnum.cs         # All app-wide enums in one file
 ├── Migrations/            # EF Core migration history
 └── Program.cs             # DI, JWT config, middleware pipeline
+
+//Does this answer the following
+ASP.NET Core Web API
+
+Features:
+- RESTful API
+- CRUD operations
+- Entity Framework Core
+- Authentication / Authorization
+- DTOs
+- Dependency Injection
+- Validation
+- Global exception handling
+- Pagination
+- Swagger/OpenAPI
+- Unit & integration tests
+
+
+| Part       | Main responsibility                       |
+| ---------- | ----------------------------------------- |
+| Controller | Handles HTTP requests                     |
+| DTO        | Defines data entering/leaving the API     |
+| Entity     | Represents database data                  |
+| DbContext  | Connects your C# entities to the database |
+| Enum       | Represents a fixed set of possible values |
+| Service    | Contains application/business logic       |
+
 ```
 
 ### Domain model
