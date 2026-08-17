@@ -1,10 +1,18 @@
-# UniSecret API
+# 🎓 UniSecret API
 
 Backend REST API for **UniSecret** — an anonymous university confession platform. Built with ASP.NET Core (.NET 10), PostgreSQL, and Redis. Serves the [UniSecret Mobile App](https://github.com/rhondelp/UniSecret-MobileApp) (React Native / Expo).
 
+![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Npgsql-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-Distributed%20Cache-DC382D?logo=redis&logoColor=white)
+![JWT](https://img.shields.io/badge/Auth-JWT%20Bearer-black?logo=jsonwebtokens&logoColor=white)
+![Swagger](https://img.shields.io/badge/API%20Docs-Swagger-85EA2D?logo=swagger&logoColor=black)
+![EF Core](https://img.shields.io/badge/ORM-EF%20Core%2010-512BD4?logo=dotnet&logoColor=white)
+![License](https://img.shields.io/badge/status-in--development-yellow)
+
 ---
 
-## Tech Stack
+## 🧱 Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -18,7 +26,7 @@ Backend REST API for **UniSecret** — an anonymous university confession platfo
 | Rate Limiting | Built-in ASP.NET Core `System.Threading.RateLimiting` |
 | Health Checks | `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` |
 
-## Packages Used
+## 📦 Packages Used
 
 ```xml
 BCrypt.Net-Next                                              4.2.0
@@ -42,7 +50,7 @@ Swashbuckle.AspNetCore                                        10.2.3
 | **Npgsql.EntityFrameworkCore.PostgreSQL** | EF Core provider for PostgreSQL, with built-in transient-failure retry. |
 | **Swashbuckle.AspNetCore** | Generates the interactive Swagger UI at `/swagger` (dev only). |
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 UniSecret-API/
@@ -57,7 +65,7 @@ UniSecret-API/
 └── appsettings.json      # Configuration (connection strings, JWT settings)
 ```
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
@@ -96,7 +104,7 @@ UniSecret-API/
    - Swagger UI (dev only): `http://localhost:5277/swagger`
    - Health check: `GET /health`
 
-## Authentication
+## 🔐 Authentication
 
 All protected endpoints require a JWT bearer token in the `Authorization` header:
 
@@ -108,7 +116,7 @@ Authorization: Bearer <token>
 - `POST /api/v1/auth/login` — authenticate, returns a token.
 - Tokens are signed with `JwtSettings:Secret` and validated for issuer, audience, lifetime, and signature. No clock skew allowance — expired means expired.
 
-## API Endpoints (current)
+## 🌐 API Endpoints (current)
 
 | Method | Route | Auth | Description |
 |---|---|---|---|
@@ -125,7 +133,7 @@ Authorization: Bearer <token>
 
 > The University create/update/delete endpoints aren't `[Authorize]`-protected yet — see **Future Plans** below. They should be admin-only before this goes to production.
 
-## Rate Limiting
+## ⏱️ Rate Limiting
 
 Global limiter, partitioned by client IP:
 
@@ -134,7 +142,7 @@ Global limiter, partitioned by client IP:
 - `/health` and `/swagger` are exempt.
 - Returns `429 Too Many Requests` when exceeded. Limits are provisional — tune with load testing.
 
-## Caching Strategy
+## ⚡ Caching Strategy
 
 Two-tier read-through cache (`CacheService`):
 
@@ -143,7 +151,7 @@ Two-tier read-through cache (`CacheService`):
 
 A read checks memory first, then Redis, then the database — populating the faster tiers on the way back. Redis is optional; if `ConnectionStrings:Redis` isn't set, the app runs on memory cache alone. Currently used by the Universities endpoints.
 
-## Database Schema (EF Core entities)
+## 🗄️ Database Schema (EF Core entities)
 
 13 tables modeled: `University`, `User`, `Confession`, `Category`, `Hashtag`, `ConfessionHashtag` (join table), `Comment` (self-referencing for threaded replies), `Like` (polymorphic via `LikeableType`/`LikeableId`), `Mention`, `SavedPost`, `Report` (polymorphic via `ReportableType`/`ReportableId`), `Notification`, `ModerationLog`.
 
@@ -153,7 +161,7 @@ Notable design choices:
 - Unique indexes on `User.Username`, `User.Email`, `Category.Slug`, `Hashtag.Tag`.
 - `Like` and `Report` use a polymorphic pattern (`*ableType` + `*ableId`) so one table covers both Confessions and Comments.
 
-## Migration History
+## 🔄 Migration History
 
 | Migration | Date | Change |
 |---|---|---|
@@ -175,14 +183,14 @@ dotnet ef database update <PreviousMigrationName>
 dotnet ef migrations remove
 ```
 
-## Security Notes
+## ⚠️ Security Notes
 
 - ⚠️ `appsettings.json` currently has a real-looking Postgres password and JWT secret committed to source. Rotate both and move them out of the repo (`dotnet user-secrets` locally, environment variables / a secrets manager in production) before this API is exposed publicly.
 - Passwords are hashed with BCrypt — never logged or returned in DTOs.
 - `RequireHttpsMetadata` is only relaxed in the `Development` environment; production enforces HTTPS.
 - University write endpoints currently have no `[Authorize]` attribute — anyone can create/edit/delete a university. Lock these down before production.
 
-## Future Plans
+## 🛣️ Future Plans
 
 The `Entities/` folder already models more of the product than the `Controllers/` folder exposes — these are the next logical endpoints to build, in rough priority order:
 
@@ -199,6 +207,6 @@ The `Entities/` folder already models more of the product than the `Controllers/
 11. **Testing** — no test project exists yet; add unit tests for `AuthService`/`CacheService` and integration tests for controllers (`WebApplicationFactory`).
 12. **CI/CD** — no pipeline yet; add a GitHub Actions workflow for build, test, and `dotnet ef migrations` validation on PRs.
 
-## Related Repository
+## 🔗 Related Repository
 
 - [UniSecret-MobileApp](https://github.com/rhondelp/UniSecret-MobileApp) — React Native (Expo, TypeScript) client that consumes this API.
