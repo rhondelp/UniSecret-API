@@ -41,9 +41,9 @@ public class CommentsController : ControllerBase
             return NotFound(new { message = $"Approved confession with ID {confessionId} was not found." });
         }
 
-        // Query top-level comments (ParentId == null)
         var query = _context.Comments
             .AsNoTracking()
+            .Include(c => c.User)
             .Where(c => c.ConfessionId == confessionId && c.ParentId == null);
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -58,9 +58,9 @@ public class CommentsController : ControllerBase
                 c.ParentId,
                 c.Body,
                 c.IsAnonymous,
-                c.IsAnonymous ? "Anonymous" : c.User.Name,
-                c.IsAnonymous ? "anonymous" : c.User.Username,
-                _context.Likes.Count(l => l.LikeableId == c.Id && l.LikeableType == "Comment"),
+                c.IsAnonymous ? "Anonymous" : (c.User != null ? c.User.Name : "User"),
+                c.IsAnonymous ? "anonymous" : (c.User != null ? c.User.Username : "user"),
+                _context.Reactions.Count(r => r.ReactableId == c.Id && r.ReactableType == "Comment"),
                 c.CreatedAt,
                 c.Replies
                     .OrderBy(r => r.CreatedAt)
@@ -70,11 +70,11 @@ public class CommentsController : ControllerBase
                         r.ParentId,
                         r.Body,
                         r.IsAnonymous,
-                        r.IsAnonymous ? "Anonymous" : r.User.Name,
-                        r.IsAnonymous ? "anonymous" : r.User.Username,
-                        _context.Likes.Count(l => l.LikeableId == r.Id && l.LikeableType == "Comment"),
+                        r.IsAnonymous ? "Anonymous" : (r.User != null ? r.User.Name : "User"),
+                        r.IsAnonymous ? "anonymous" : (r.User != null ? r.User.Username : "user"),
+                        _context.Reactions.Count(like => like.ReactableId == r.Id && like.ReactableType == "Comment"),
                         r.CreatedAt,
-                        Array.Empty<CommentDto>()
+                        new List<CommentDto>()
                     ))
                     .ToList()
             ))
@@ -93,25 +93,27 @@ public class CommentsController : ControllerBase
         CreateCommentDto dto,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(dto.Body))
+        {
+            return BadRequest(new { message = "Comment content cannot be empty." });
+        }
+
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
         {
             return Unauthorized(new { message = "Invalid token claims." });
         }
 
-        var user = await _context.Users
+        var dbUser = await _context.Users
             .AsNoTracking()
-            .Where(u => u.Id == userId)
-            .Select(u => new { u.Status, u.Name, u.Username })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
-        if (user is null || user.Status != UserStatus.Active)
+        if (dbUser is null || dbUser.Status != UserStatus.Active)
         {
             return Forbid();
         }
 
         var confession = await _context.Confessions
-            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == confessionId && c.Status == ConfessionStatus.Approved, cancellationToken);
 
         if (confession is null)
@@ -144,7 +146,7 @@ public class CommentsController : ControllerBase
             UpdatedAt = now
         };
 
-        // Extract and map @mentions
+        // Parse mentions (@username)
         var matches = Regex.Matches(dto.Body, @"@([a-zA-Z0-9_]+)");
         var usernames = matches
             .Select(m => m.Groups[1].Value.ToLowerInvariant())
@@ -179,48 +181,13 @@ public class CommentsController : ControllerBase
             comment.ParentId,
             comment.Body,
             comment.IsAnonymous,
-            comment.IsAnonymous ? "Anonymous" : user.Name,
-            comment.IsAnonymous ? "anonymous" : user.Username,
+            comment.IsAnonymous ? "Anonymous" : dbUser.Name,
+            comment.IsAnonymous ? "anonymous" : dbUser.Username,
             0,
             comment.CreatedAt,
-            Array.Empty<CommentDto>()
+            new List<CommentDto>()
         );
 
         return CreatedAtAction(nameof(GetComments), new { confessionId }, result);
-    }
-
-    // DELETE: api/v1/comments/5
-    [Authorize]
-    [HttpDelete("comments/{id:int}")]
-    public async Task<IActionResult> DeleteComment(
-        int id,
-        CancellationToken cancellationToken = default)
-    {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var userRoleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
-
-        if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
-        {
-            return Unauthorized();
-        }
-
-        var comment = await _context.Comments.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
-        if (comment is null)
-        {
-            return NotFound(new { message = $"Comment with ID {id} was not found." });
-        }
-
-        var isAuthor = comment.UserId == userId;
-        var isAdmin = userRoleClaim is nameof(UserRole.Admin) or nameof(UserRole.SuperAdmin);
-
-        if (!isAuthor && !isAdmin)
-        {
-            return Forbid();
-        }
-
-        _context.Comments.Remove(comment);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        return NoContent();
     }
 }
