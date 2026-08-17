@@ -20,23 +20,33 @@ public class ConfessionsController : ControllerBase
         _context = context;
     }
 
-    // GET: api/v1/confessions?universityId=1
+    // GET: api/v1/confessions?universityId=1&page=1&pageSize=20
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ConfessionDto>>> GetConfessions([FromQuery] int? universityId)
+    public async Task<ActionResult<IEnumerable<ConfessionDto>>> GetConfessions(
+        [FromQuery] int? universityId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
+        // Prevent clients from requesting extremely large result sets.
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.Confessions
-            .Include(c => c.Category)
-            .Include(c => c.User)
-            .Where(c => c.Status == ConfessionStatus.Approved) // Only show approved confessions publicly
-            .AsQueryable();
+            .AsNoTracking()
+            .Where(c => c.Status == ConfessionStatus.Approved);
 
         if (universityId.HasValue)
         {
-            query = query.Where(c => c.UniversityId == universityId.Value);
+            query = query.Where(
+                c => c.UniversityId == universityId.Value);
         }
 
         var confessions = await query
             .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(c => new ConfessionDto(
                 c.Id,
                 c.UniversityId,
@@ -44,53 +54,95 @@ public class ConfessionsController : ControllerBase
                 c.Category.Name,
                 c.Body,
                 c.IsAnonymous,
-                // Core Rule: Hide identity publicly if IsAnonymous is true
-                c.IsAnonymous ? "Anonymous" : c.User.Name,
-                c.IsAnonymous ? "anonymous" : c.User.Username,
+                c.IsAnonymous
+                    ? "Anonymous"
+                    : c.User.Name,
+                c.IsAnonymous
+                    ? "anonymous"
+                    : c.User.Username,
                 c.Status,
                 c.ScheduledAt,
                 c.CreatedAt
             ))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Ok(confessions);
     }
 
     // POST: api/v1/confessions
-    [Authorize] // Requires JWT Token
+    [Authorize]
     [HttpPost]
-    public async Task<ActionResult<ConfessionDto>> CreateConfession(CreateConfessionDto dto)
+    public async Task<ActionResult<ConfessionDto>> CreateConfession(
+        CreateConfessionDto dto,
+        CancellationToken cancellationToken = default)
     {
-        // Extract User ID from JWT Claims
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim is null || !int.TryParse(userIdClaim, out int userId))
+        var userIdClaim =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (userIdClaim is null ||
+            !int.TryParse(userIdClaim, out var userId))
         {
-            return Unauthorized(new { message = "Invalid token claims." });
+            return Unauthorized(
+                new { message = "Invalid token claims." });
         }
 
-        // Verify University and Category exist
-        var university = await _context.Universities.FindAsync(dto.UniversityId);
-        if (university is null) return BadRequest(new { message = "University not found." });
+        // --------------------------------------------------------
+        // Verify University
+        // --------------------------------------------------------
 
-        var category = await _context.Categories.FindAsync(dto.CategoryId);
-        if (category is null) return BadRequest(new { message = "Category not found." });
+        var universityExists =
+            await _context.Universities
+                .AsNoTracking()
+                .AnyAsync(
+                    u => u.Id == dto.UniversityId,
+                    cancellationToken);
+
+        if (!universityExists)
+        {
+            return BadRequest(
+                new { message = "University not found." });
+        }
+
+        // --------------------------------------------------------
+        // Verify Category
+        // --------------------------------------------------------
+
+        var categoryExists =
+            await _context.Categories
+                .AsNoTracking()
+                .AnyAsync(
+                    c => c.Id == dto.CategoryId,
+                    cancellationToken);
+
+        if (!categoryExists)
+        {
+            return BadRequest(
+                new { message = "Category not found." });
+        }
+
+        var now = DateTime.UtcNow;
 
         var confession = new Confession
         {
-            UserId = userId, // ALWAYS stored for internal accountability
+            UserId = userId,
             UniversityId = dto.UniversityId,
             CategoryId = dto.CategoryId,
             Body = dto.Body,
             IsAnonymous = dto.IsAnonymous,
-            Status = ConfessionStatus.Pending, // Needs moderation approval by default
+            Status = ConfessionStatus.Pending,
             ScheduledAt = dto.ScheduledAt,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _context.Confessions.Add(confession);
-        await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Confession submitted successfully and is pending review." });
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new
+        {
+            message =
+                "Confession submitted successfully and is pending review."
+        });
     }
 }
