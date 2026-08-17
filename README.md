@@ -118,20 +118,80 @@ Authorization: Bearer <token>
 
 ## 🌐 API Endpoints (current)
 
+**Auth**
+
 | Method | Route | Auth | Description |
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | — | Register a new user |
 | POST | `/api/v1/auth/login` | — | Log in, get JWT |
-| GET | `/api/v1/confessions` | — | List approved confessions (paginated, optional `universityId` filter) |
-| POST | `/api/v1/confessions` | ✅ | Submit a confession (goes to `Pending` for moderation) |
-| GET | `/api/v1/universities` | — | List universities (Redis/memory cached) |
+
+**Confessions**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/confessions` | — | List approved confessions (paginated, filterable) |
+| GET | `/api/v1/confessions/{id}` | — | Get a single confession |
+| POST | `/api/v1/confessions` | ✅ | Submit a confession (goes to `Pending`; hashtags auto-parsed from the body) — blocked for suspended/banned users |
+
+**Comments**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/confessions/{confessionId}/comments` | — | List comments on a confession (paginated) |
+| POST | `/api/v1/confessions/{confessionId}/comments` | ✅ | Add a comment (threaded replies supported) |
+| DELETE | `/api/v1/comments/{id}` | ✅ | Delete your own comment |
+
+**Likes**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/likes/toggle` | ✅ | Like/unlike a Confession or Comment (polymorphic) |
+| GET | `/api/v1/likes/status` | — | Check like status/count for a target |
+
+**Saved Posts**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/savedposts/{confessionId}/toggle` | ✅ | Bookmark/unbookmark a confession |
+| GET | `/api/v1/savedposts` | ✅ | List the current user's saved posts |
+
+**Reports & Moderation**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/reports` | ✅ | Report a Confession or Comment |
+| GET | `/api/v1/reports` | Admin/SuperAdmin | List reports |
+| GET | `/api/v1/moderation/queue` | Admin/SuperAdmin | Pending confessions queue |
+| POST | `/api/v1/moderation/confessions/{id}/review` | Admin/SuperAdmin | Approve/reject a confession |
+| POST | `/api/v1/moderation/users/{id}/status` | Admin/SuperAdmin | Suspend/ban/reinstate a user |
+| GET | `/api/v1/moderation/logs` | Admin/SuperAdmin | Audit log of moderation actions |
+
+**Categories & Hashtags**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/categories` | — | List categories |
+| GET | `/api/v1/categories/{id}` | — | Get a category |
+| GET | `/api/v1/hashtags/trending` | — | Trending hashtags |
+| GET | `/api/v1/hashtags/search` | — | Search hashtags |
+
+**Universities**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/universities` | — | List universities (cached) |
 | GET | `/api/v1/universities/{id}` | — | Get one university (cached) |
-| POST | `/api/v1/universities` | — | Create a university |
-| PUT | `/api/v1/universities/{id}` | — | Update a university |
-| DELETE | `/api/v1/universities/{id}` | — | Delete a university |
+| POST | `/api/v1/universities` | Admin/SuperAdmin | Create a university |
+| PUT | `/api/v1/universities/{id}` | Admin/SuperAdmin | Update a university |
+| DELETE | `/api/v1/universities/{id}` | Admin/SuperAdmin | Delete a university |
+
+**System**
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
 | GET | `/health` | — | Health check for DB connectivity |
 
-> The University create/update/delete endpoints aren't `[Authorize]`-protected yet — see **Future Plans** below. They should be admin-only before this goes to production.
+Role-based access uses three tiers (`Student`, `Admin`, `SuperAdmin`) via `[Authorize(Roles = "...")]`.
 
 ## ⏱️ Rate Limiting
 
@@ -154,6 +214,8 @@ A read checks memory first, then Redis, then the database — populating the fas
 ## 🗄️ Database Schema (EF Core entities)
 
 13 tables modeled: `University`, `User`, `Confession`, `Category`, `Hashtag`, `ConfessionHashtag` (join table), `Comment` (self-referencing for threaded replies), `Like` (polymorphic via `LikeableType`/`LikeableId`), `Mention`, `SavedPost`, `Report` (polymorphic via `ReportableType`/`ReportableId`), `Notification`, `ModerationLog`.
+
+All tables except `Notification` and `Mention` now have live endpoints (see API Endpoints above).
 
 Notable design choices:
 - Enums (`Status`, `Role`, `Reason`, etc.) are stored as strings, not ints — readable directly in the DB.
@@ -188,24 +250,19 @@ dotnet ef migrations remove
 - ⚠️ `appsettings.json` currently has a real-looking Postgres password and JWT secret committed to source. Rotate both and move them out of the repo (`dotnet user-secrets` locally, environment variables / a secrets manager in production) before this API is exposed publicly.
 - Passwords are hashed with BCrypt — never logged or returned in DTOs.
 - `RequireHttpsMetadata` is only relaxed in the `Development` environment; production enforces HTTPS.
-- University write endpoints currently have no `[Authorize]` attribute — anyone can create/edit/delete a university. Lock these down before production.
+- ✅ Role-based authorization is now enforced: University writes, moderation, and report listing all require `Admin`/`SuperAdmin`. Suspended/banned users are blocked from posting confessions.
 
 ## 🛣️ Future Plans
 
-The `Entities/` folder already models more of the product than the `Controllers/` folder exposes — these are the next logical endpoints to build, in rough priority order:
+Comments, Likes, Saved Posts, Reports, Moderation, Categories, and Hashtags are now all shipped ✅. What's left:
 
-1. **Comments** — CRUD + threaded replies (`Comment.ParentId` is already modeled).
-2. **Likes** — like/unlike a Confession or Comment (polymorphic `Like` entity is ready).
-3. **Reports & Moderation** — report a Confession/Comment, and an admin moderation queue backed by `ModerationLog` and `Confession.Status` transitions (`Pending → Approved/Rejected`).
-4. **Notifications** — surface `Notification` rows (replies, mentions, approvals) to the mobile app, likely via a polling or push endpoint.
-5. **Saved Posts** — bookmark/unbookmark a Confession.
-6. **Hashtags & Mentions** — parse `#tags` and `@mentions` on submit; expose hashtag search/trending.
-7. **Authorization hardening** — role-based policies (`Student` / `Admin` / `SuperAdmin`) for moderation and university-management endpoints, instead of the current all-or-nothing `[Authorize]`.
-8. **Refresh tokens** — access tokens currently have no refresh flow; add refresh token rotation so users aren't forced to re-login every `DurationInDays`.
-9. **Scheduled confessions** — `Confession.ScheduledAt` exists in the schema but nothing currently publishes a scheduled confession when its time arrives (needs a background job, e.g. `IHostedService` or Hangfire).
-10. **Secrets/config cleanup** — move connection strings and JWT secret out of `appsettings.json` (see Security Notes).
-11. **Testing** — no test project exists yet; add unit tests for `AuthService`/`CacheService` and integration tests for controllers (`WebApplicationFactory`).
-12. **CI/CD** — no pipeline yet; add a GitHub Actions workflow for build, test, and `dotnet ef migrations` validation on PRs.
+1. **Notifications** — surface `Notification` rows (replies, mentions, approvals) to the mobile app, likely via a polling or push endpoint. `Mention` parsing on submit is also still open (Hashtag parsing already ships; `@mentions` doesn't yet).
+2. **Refresh tokens** — access tokens currently have no refresh flow; add refresh token rotation so users aren't forced to re-login every `DurationInDays`.
+3. **Scheduled confessions** — `ConfessionStatus.Scheduled` exists in the schema but nothing currently publishes a scheduled confession when its time arrives (needs a background job, e.g. `IHostedService` or Hangfire).
+4. **Secrets/config cleanup** — move connection strings and JWT secret out of `appsettings.json` (see Security Notes).
+5. **Testing** — no test project exists yet; add unit tests for `AuthService`/`CacheService` and integration tests for controllers (`WebApplicationFactory`).
+6. **CI/CD** — no pipeline yet; add a GitHub Actions workflow for build, test, and `dotnet ef migrations` validation on PRs.
+7. **Rate limiting for new endpoints** — confirm Comments/Likes/Reports/Moderation routes sit under the general 120 req/min limiter (or need their own tier — moderation actions especially).
 
 ## 🔗 Related Repository
 
