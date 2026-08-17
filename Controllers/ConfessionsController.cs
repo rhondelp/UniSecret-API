@@ -64,7 +64,7 @@ public class ConfessionsController : ControllerBase
                 c.Category.Name,
                 c.Body,
                 c.IsAnonymous,
-                c.IsAnonymous ? "Anonymous" : c.User.Name,
+                c.IsAnonymous ? "Anonymous" : (string.IsNullOrWhiteSpace(c.User.Name) ? "Anonymous User" : c.User.Name),
                 c.IsAnonymous ? "anonymous" : c.User.Username,
                 c.Status,
                 c.ScheduledAt,
