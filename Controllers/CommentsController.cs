@@ -1,4 +1,3 @@
-// File: Controllers/CommentsController.cs
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;

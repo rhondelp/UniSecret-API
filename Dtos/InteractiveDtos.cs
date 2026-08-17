@@ -1,4 +1,3 @@
-// File: Dtos/InteractiveDtos.cs
 using System.ComponentModel.DataAnnotations;
 
 namespace UniSecretApi.Dtos;

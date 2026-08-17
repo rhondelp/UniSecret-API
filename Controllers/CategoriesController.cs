@@ -1,4 +1,3 @@
-// File: Controllers/CategoriesController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UniSecretApi.Data;
