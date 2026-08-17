@@ -59,13 +59,13 @@ public class HashtagsController : ControllerBase
         var results = await _context.Hashtags
             .AsNoTracking()
             .Where(h => h.Tag.Contains(searchTerm))
+            .OrderByDescending(h => h.ConfessionHashtags.Count)
+            .Take(limit)
             .Select(h => new HashtagDto(
                 h.Id,
                 h.Tag,
                 h.ConfessionHashtags.Count
             ))
-            .OrderByDescending(h => h.UsageCount)
-            .Take(limit)
             .ToListAsync(cancellationToken);
 
         return Ok(results);

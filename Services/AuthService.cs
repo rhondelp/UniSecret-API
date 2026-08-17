@@ -169,6 +169,7 @@ public class AuthService
                 user.Name,
                 user.Username,
                 user.Email,
+                user.UniversityId,
                 token);
 
         return (
@@ -244,6 +245,7 @@ public class AuthService
                 user.Name,
                 user.Username,
                 user.Email,
+                user.UniversityId,
                 token);
 
         return (

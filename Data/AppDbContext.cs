@@ -106,6 +106,14 @@ public class AppDbContext : DbContext
                 c.CreatedAt
             });
 
+        modelBuilder.Entity<Like>()
+            .HasIndex(l => new { l.UserId, l.LikeableId, l.LikeableType })
+            .IsUnique();
+
+        modelBuilder.Entity<SavedPost>()
+            .HasIndex(s => new { s.UserId, s.ConfessionId })
+            .IsUnique();
+
         // ------------------------------------------------------------
         // Comment hierarchy
         // ------------------------------------------------------------

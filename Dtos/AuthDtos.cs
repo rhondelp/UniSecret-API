@@ -23,6 +23,7 @@ public record AuthResponseDto(
     string Name,
     string Username,
     string Email,
+    int UniversityId,
     string Token
 );
 
