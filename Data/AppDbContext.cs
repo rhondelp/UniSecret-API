@@ -23,6 +23,8 @@ public class AppDbContext : DbContext
     public DbSet<Report> Reports { get; set; } = null!;
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<ModerationLog> ModerationLogs { get; set; } = null!;
+    public DbSet<Reaction> Reactions { get; set; } = null!;
+    public DbSet<Share> Shares { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +36,20 @@ public class AppDbContext : DbContext
                 ch.ConfessionId,
                 ch.HashtagId
             });
+
+        modelBuilder.Entity<Reaction>()
+            .HasIndex(r => new { r.UserId, r.ReactableId, r.ReactableType })
+            .IsUnique();
+
+        modelBuilder.Entity<Reaction>()
+            .Property(r => r.Type)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Share>()
+            .HasOne(s => s.Confession)
+            .WithMany(c => c.Shares)
+            .HasForeignKey(s => s.ConfessionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ConfessionHashtag>()
             .HasOne(ch => ch.Confession)

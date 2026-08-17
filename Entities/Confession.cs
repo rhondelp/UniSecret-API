@@ -10,6 +10,8 @@ public class Confession
     public int UserId { get; set; } // FK -> Always stored for accountability
     public User User { get; set; } = null!;
 
+    public string? ImageUrl { get; set; }
+
     public int UniversityId { get; set; } // FK
     public University University { get; set; } = null!;
 
@@ -36,4 +38,6 @@ public class Confession
     // Navigation properties
     public ICollection<ConfessionHashtag> ConfessionHashtags { get; set; } = new List<ConfessionHashtag>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
+
+    public ICollection<Share> Shares { get; set; } = new List<Share>();
 }

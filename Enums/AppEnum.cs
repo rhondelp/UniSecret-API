@@ -45,3 +45,22 @@ public enum ReportStatus
     Dismissed,
     ActionTaken
 }
+
+public enum ReactionType 
+{ 
+    Like,
+    Love, 
+    Haha, 
+    Sad, 
+    Angry, 
+    Cry 
+}
+
+public enum NotificationType
+{
+    Reaction,
+    Comment,
+    Share,
+    Mention,
+    System
+}

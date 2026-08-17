@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using UniSecretApi.Enums;
 
 namespace UniSecretApi.Dtos;
 
@@ -39,4 +40,44 @@ public record SavedPostDto(
     int ConfessionId,
     ConfessionDto Confession,
     DateTime SavedAt
+);
+
+
+public record SetReactionDto(
+    [Required] int ReactableId,
+    [Required] string ReactableType, // "Confession" or "Comment"
+    [Required] ReactionType Type
+);
+
+public record ReactionCountSummaryDto(
+    ReactionType Type,
+    int Count
+);
+
+public record ReactionUserDto(
+    int UserId,
+    string Name,
+    string Username,
+    ReactionType Type,
+    DateTime ReactedAt
+);
+public record ReactionStatusDto(
+    ReactionType? UserReaction,
+    int TotalReactions,
+    List<ReactionCountSummaryDto> Counts
+);
+
+public record CreateShareDto(
+    [Required] int ConfessionId,
+    string? Caption
+);
+
+public record ShareDto(
+    int Id,
+    int UserId,
+    string UserName,
+    int ConfessionId,
+    ConfessionDto Confession,
+    string? Caption,
+    DateTime CreatedAt
 );
