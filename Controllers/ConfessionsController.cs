@@ -69,12 +69,15 @@ public class ConfessionsController : ControllerBase
                 c.Status,
                 c.ScheduledAt,
                 c.CreatedAt,
-                // Calculate total likes for this confession
-                _context.Likes.Count(l => l.LikeableId == c.Id && l.LikeableType == "Confession"),
-                // Check if current user liked it (only if logged in)
-                currentUserId > 0 && _context.Likes.Any(l => l.UserId == currentUserId && l.LikeableId == c.Id && l.LikeableType == "Confession"),
-                // Check if current user saved it (only if logged in)
-                currentUserId > 0 && _context.SavedPosts.Any(s => s.UserId == currentUserId && s.ConfessionId == c.Id)
+                _context.Reactions.Count(r => r.ReactableId == c.Id && r.ReactableType == "Confession"),
+                currentUserId > 0 && _context.Reactions.Any(r => r.UserId == currentUserId && r.ReactableId == c.Id && r.ReactableType == "Confession"),
+                currentUserId > 0 && _context.SavedPosts.Any(s => s.UserId == currentUserId && s.ConfessionId == c.Id),
+                c.ImageUrl,
+                _context.Comments.Count(cm => cm.ConfessionId == c.Id),
+                _context.Shares.Count(sh => sh.ConfessionId == c.Id),
+                currentUserId > 0 
+                    ? _context.Reactions.Where(r => r.UserId == currentUserId && r.ReactableId == c.Id && r.ReactableType == "Confession").Select(r => (ReactionType?)r.Type).FirstOrDefault()
+                    : null
             ))
             .ToListAsync(cancellationToken);
 
@@ -271,6 +274,7 @@ public class ConfessionsController : ControllerBase
             CategoryId = dto.CategoryId,
             Body = dto.Body,
             IsAnonymous = dto.IsAnonymous,
+            ImageUrl = dto.ImageUrl,
             Status = ConfessionStatus.Pending,
             ScheduledAt = dto.ScheduledAt,
             CreatedAt = now,

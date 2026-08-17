@@ -8,7 +8,8 @@ public record CreateConfessionDto(
     [Required] int CategoryId,
     [Required] string Body,
     bool IsAnonymous = true,
-    DateTime? ScheduledAt = null
+    DateTime? ScheduledAt = null,
+    string? ImageUrl = null
 );
 
 public record ConfessionDto(
@@ -18,7 +19,6 @@ public record ConfessionDto(
     string CategoryName,
     string Body,
     bool IsAnonymous,
-    // If anonymous, hide author name/username from public responses
     string AuthorName, 
     string AuthorUsername,
     ConfessionStatus Status,
@@ -27,6 +27,8 @@ public record ConfessionDto(
     int LikesCount = 0,
     bool IsLiked = false,
     bool IsSaved = false,
-    string? ImageUrl = null
+    string? ImageUrl = null,
+    int CommentCount = 0,
+    int ShareCount = 0,
+    ReactionType? UserReaction = null
 );
-
