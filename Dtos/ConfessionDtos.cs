@@ -26,5 +26,7 @@ public record ConfessionDto(
     DateTime CreatedAt,
     int LikesCount = 0,
     bool IsLiked = false,
-    bool IsSaved = false
+    bool IsSaved = false,
+    string? ImageUrl = null
 );
+
