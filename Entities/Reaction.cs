@@ -14,7 +14,7 @@ public class Reaction
 
     [Required]
     [MaxLength(20)]
-    public string ReactableType { get; set; } = string.Empty; // "Confession" or "Comment"
+    public string ReactableType { get; set; } = string.Empty; 
 
     public ReactionType Type { get; set; }
 

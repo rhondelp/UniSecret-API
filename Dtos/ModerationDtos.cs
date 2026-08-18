@@ -5,8 +5,8 @@ namespace UniSecretApi.Dtos;
 
 public record CreateReportDto(
     [Required] int ReportableId,
-    [Required] string ReportableType, // "Confession" or "Comment"
-    [Required] string Reason,         // "Bullying", "HateSpeech", "Spam", "Nsfw", "Harassment"
+    [Required] string ReportableType,
+    [Required] string Reason,        
     string? Details
 );
 

@@ -101,7 +101,7 @@ public class SharesController : ControllerBase
                     0,     
                     false, 
                     false,
-                    s.Confession.ImageUrl // Fixed capital 'C'
+                    s.Confession.ImageUrl
                 ),
                 s.Caption,
                 s.CreatedAt

@@ -14,7 +14,7 @@ public class Report
 
     [Required]
     [MaxLength(20)]
-    public string ReportableType { get; set; } = string.Empty; // "Confession" or "Comment"
+    public string ReportableType { get; set; } = string.Empty;
 
     public ReportReason Reason { get; set; }
     public ReportStatus Status { get; set; } = ReportStatus.Pending;

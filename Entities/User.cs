@@ -7,7 +7,7 @@ public class User
 {
     public int Id { get; set; }
 
-    public int UniversityId { get; set; } // Foreign Key
+    public int UniversityId { get; set; } 
     public University University { get; set; } = null!; // Navigation Property
 
     [Required]

@@ -11,7 +11,7 @@ public class ModerationLog
 
     [Required]
     [MaxLength(50)]
-    public string Action { get; set; } = string.Empty; // approved, rejected, banned_user, etc.
+    public string Action { get; set; } = string.Empty; 
 
     public int TargetId { get; set; }
 

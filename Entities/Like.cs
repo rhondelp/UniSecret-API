@@ -9,11 +9,10 @@ public class Like
     public int UserId { get; set; }
     public User User { get; set; } = null!;
 
-    public int LikeableId { get; set; } // ID of Confession or Comment
+    public int LikeableId { get; set; } 
 
     [Required]
     [MaxLength(20)]
-    public string LikeableType { get; set; } = string.Empty; // "Confession" or "Comment"
-
+    public string LikeableType { get; set; } = string.Empty; 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

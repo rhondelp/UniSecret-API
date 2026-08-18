@@ -6,10 +6,10 @@ public class Comment
 {
     public int Id { get; set; }
 
-    public int ConfessionId { get; set; } // FK
+    public int ConfessionId { get; set; } 
     public Confession Confession { get; set; } = null!;
 
-    public int UserId { get; set; } // FK
+    public int UserId { get; set; }
     public User User { get; set; } = null!;
 
     // Self-referencing FK for threaded replies

@@ -27,7 +27,7 @@ public class Confession
 
     public DateTime? ScheduledAt { get; set; }
 
-    public int? ApprovedById { get; set; } // FK (Nullable)
+    public int? ApprovedById { get; set; } 
     public User? ApprovedBy { get; set; }
 
     public string? RejectedReason { get; set; }

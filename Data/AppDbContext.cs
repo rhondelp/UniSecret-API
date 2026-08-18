@@ -9,7 +9,6 @@ public class AppDbContext : DbContext
     {
     }
 
-    // DbSets represent database tables
     public DbSet<University> Universities { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Confession> Confessions { get; set; } = null!;

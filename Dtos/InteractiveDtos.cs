@@ -3,7 +3,6 @@ using UniSecretApi.Enums;
 
 namespace UniSecretApi.Dtos;
 
-// Comment DTOs
 public record CreateCommentDto(
     [Required] string Body,
     int? ParentId = null,
@@ -26,7 +25,7 @@ public record CommentDto(
 // Like DTOs
 public record ToggleLikeDto(
     [Required] int LikeableId,
-    [Required] string LikeableType // "Confession" or "Comment"
+    [Required] string LikeableType
 );
 
 public record LikeStatusDto(
@@ -45,7 +44,7 @@ public record SavedPostDto(
 
 public record SetReactionDto(
     [Required] int ReactableId,
-    [Required] string ReactableType, // "Confession" or "Comment"
+    [Required] string ReactableType, 
     [Required] ReactionType Type
 );
 
