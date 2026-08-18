@@ -61,7 +61,7 @@ public class ReactionsController : ControllerBase
 
         return await GetReactionSummary(dto.ReactableId, normalizedType, userId, cancellationToken);
     }
-
+    
     [HttpGet("users")]
     public async Task<ActionResult<List<ReactionUserDto>>> GetReactors(
         [FromQuery] int reactableId,
@@ -69,9 +69,11 @@ public class ReactionsController : ControllerBase
         [FromQuery] ReactionType? filterType = null,
         CancellationToken cancellationToken = default)
     {
+        var normalizedType = reactableType.Trim();
+
         var query = _context.Reactions
             .AsNoTracking()
-            .Where(r => r.ReactableId == reactableId && r.ReactableType == reactableType);
+            .Where(r => r.ReactableId == reactableId && EF.Functions.ILike(r.ReactableType, normalizedType));
 
         if (filterType.HasValue)
         {
