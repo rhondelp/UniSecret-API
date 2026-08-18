@@ -4,7 +4,7 @@ using UniSecretApi.Enums;
 namespace UniSecretApi.Dtos;
 
 public record CreateConfessionDto(
-    [Required] int UniversityId,
+    int? UniversityId,
     [Required] int CategoryId,
     [Required] string Body,
     bool IsAnonymous = true,
