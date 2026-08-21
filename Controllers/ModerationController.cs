@@ -52,7 +52,11 @@ public class ModerationController : ControllerBase
                 c.IsAnonymous ? "anonymous" : c.User.Username,
                 c.Status,
                 c.ScheduledAt,
-                c.CreatedAt
+                c.CreatedAt,
+                0,
+                false,
+                false,
+                c.ImageUrl
             ))
             .ToListAsync(cancellationToken);
 

@@ -12,6 +12,13 @@ public record CreateConfessionDto(
     string? ImageUrl = null
 );
 
+public record UpdateConfessionDto(
+    [Required] int CategoryId,
+    [Required] string Body,
+    bool IsAnonymous = false,
+    string? ImageUrl = null
+);
+
 public record ConfessionDto(
     int Id,
     int UniversityId,

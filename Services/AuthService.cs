@@ -254,6 +254,52 @@ public class AuthService
             response);
     }
 
+    public async Task<(bool Success, string Message)> ChangePasswordAsync(
+        int userId,
+        ChangePasswordDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var user =
+            await _context.Users
+                .FirstOrDefaultAsync(
+                    u => u.Id == userId,
+                    cancellationToken);
+
+        if (user is null)
+        {
+            return (false, "User not found.");
+        }
+
+        var isCurrentPasswordValid =
+            BCrypt.Net.BCrypt.Verify(
+                dto.CurrentPassword,
+                user.PasswordHash);
+
+        if (!isCurrentPasswordValid)
+        {
+            return (false, "Current password is incorrect.");
+        }
+
+        if (BCrypt.Net.BCrypt.Verify(
+                dto.NewPassword,
+                user.PasswordHash))
+        {
+            return (false, "New password must be different from the current password.");
+        }
+
+        // BCrypt hashing is CPU-intensive and intentionally done
+        // outside of any explicit transaction.
+
+        user.PasswordHash =
+            BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return (true, "Password changed successfully.");
+    }
+
     private string GenerateJwtToken(User user)
     {
         var jwtSettings =

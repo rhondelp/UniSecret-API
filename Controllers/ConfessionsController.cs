@@ -393,6 +393,338 @@ public class ConfessionsController : ControllerBase
     }
 
     // ============================================================
+    // GET USER'S CONFESSIONS (profile feed)
+    // ============================================================
+
+    // GET: api/v1/confessions/user/5?page=1&pageSize=20
+    //
+    // Privacy rules:
+    // - Profile owner (or admin): sees ALL own confessions,
+    //   including anonymous ones and every moderation status.
+    // - Everyone else: only Approved, non-anonymous confessions
+    //   (anonymous posts must never be linkable to an account).
+    // ============================================================
+
+    [HttpGet("user/{userId:int}")]
+    public async Task<ActionResult<PagedResult<ConfessionDto>>> GetUserConfessions(
+        int userId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var userIdClaim =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        var userRoleClaim =
+            User.FindFirst(ClaimTypes.Role)?.Value;
+
+        _ = int.TryParse(userIdClaim, out var currentUserId);
+
+        var isOwner = currentUserId == userId;
+        var isAdmin = userRoleClaim is nameof(UserRole.Admin) or nameof(UserRole.SuperAdmin);
+        var canSeeEverything = isOwner || isAdmin;
+
+        var userExists = await _context.Users
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == userId, cancellationToken);
+
+        if (!userExists)
+        {
+            return NotFound(new { message = $"User with ID {userId} was not found." });
+        }
+
+        var query = _context.Confessions
+            .AsNoTracking()
+            .Where(c => c.UserId == userId);
+
+        if (!canSeeEverything)
+        {
+            query = query.Where(c =>
+                c.Status == ConfessionStatus.Approved &&
+                !c.IsAnonymous);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var confessions = await query
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new ConfessionDto(
+                c.Id,
+                c.UniversityId,
+                c.CategoryId,
+                c.Category.Name,
+                c.Body,
+                c.IsAnonymous,
+
+                c.IsAnonymous && !canSeeEverything
+                    ? "Anonymous"
+                    : (
+                        string.IsNullOrWhiteSpace(c.User.Name)
+                            ? "Anonymous User"
+                            : c.User.Name
+                    ),
+
+                c.IsAnonymous && !canSeeEverything
+                    ? "anonymous"
+                    : c.User.Username,
+
+                c.Status,
+                c.ScheduledAt,
+                c.CreatedAt,
+
+                _context.Reactions.Count(
+                    r =>
+                        r.ReactableId == c.Id &&
+                        r.ReactableType == "Confession"),
+
+                currentUserId > 0 &&
+                _context.Reactions.Any(
+                    r =>
+                        r.UserId == currentUserId &&
+                        r.ReactableId == c.Id &&
+                        r.ReactableType == "Confession"),
+
+                currentUserId > 0 &&
+                _context.SavedPosts.Any(
+                    s =>
+                        s.UserId == currentUserId &&
+                        s.ConfessionId == c.Id),
+
+                canSeeEverything ? c.ImageUrl : null,
+
+                _context.Comments.Count(
+                    cm =>
+                        cm.ConfessionId == c.Id),
+
+                _context.Shares.Count(
+                    sh =>
+                        sh.ConfessionId == c.Id),
+
+                currentUserId > 0
+                    ? _context.Reactions
+                        .Where(
+                            r =>
+                                r.UserId == currentUserId &&
+                                r.ReactableId == c.Id &&
+                                r.ReactableType == "Confession")
+                        .Select(r => (ReactionType?)r.Type)
+                        .FirstOrDefault()
+                    : null
+            ))
+            .ToListAsync(cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return Ok(new PagedResult<ConfessionDto>(
+            confessions,
+            page,
+            pageSize,
+            totalCount,
+            totalPages));
+    }
+
+    // ============================================================
+    // UPDATE CONFESSION
+    //
+    // Author-only. Any edit resets the confession to Pending so it
+    // goes through moderation again.
+    // ============================================================
+
+    // PUT: api/v1/confessions/5
+    [Authorize]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateConfession(
+        int id,
+        UpdateConfessionDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdClaim =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(userIdClaim) ||
+            !int.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token claims." });
+        }
+
+        var confession = await _context.Confessions
+            .Include(c => c.ConfessionHashtags)
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+        if (confession is null)
+        {
+            return NotFound(new { message = $"Confession with ID {id} was not found." });
+        }
+
+        if (confession.UserId != userId)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "You can only edit your own confessions." });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Body))
+        {
+            return BadRequest(new { message = "Confession body is required." });
+        }
+
+        var body = dto.Body.Trim();
+
+        if (body.Length > 2000)
+        {
+            return BadRequest(new { message = "Confession must not exceed 2000 characters." });
+        }
+
+        var categoryExists = await _context.Categories
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == dto.CategoryId, cancellationToken);
+
+        if (!categoryExists)
+        {
+            return BadRequest(new { message = "Category not found." });
+        }
+
+        confession.CategoryId = dto.CategoryId;
+        confession.Body = body;
+        confession.IsAnonymous = dto.IsAnonymous;
+        confession.ImageUrl = dto.ImageUrl;
+        confession.Status = ConfessionStatus.Pending;
+        confession.UpdatedAt = DateTime.UtcNow;
+
+        // --------------------------------------------------------
+        // Rebuild hashtags from the new body
+        // --------------------------------------------------------
+
+        confession.ConfessionHashtags.Clear();
+
+        var matches = Regex.Matches(body, @"#([a-zA-Z0-9_]+)");
+
+        var tags = matches
+            .Select(m => m.Groups[1].Value.ToLowerInvariant())
+            .Distinct()
+            .Where(t => t.Length <= 50)
+            .ToList();
+
+        foreach (var tag in tags)
+        {
+            var hashtag = await _context.Hashtags
+                .FirstOrDefaultAsync(h => h.Tag == tag, cancellationToken);
+
+            if (hashtag is null)
+            {
+                hashtag = new Hashtag { Tag = tag };
+                _context.Hashtags.Add(hashtag);
+            }
+
+            confession.ConfessionHashtags.Add(
+                new ConfessionHashtag { Confession = confession, Hashtag = hashtag });
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new
+        {
+            message = "Confession updated successfully and is pending review.",
+            id = confession.Id
+        });
+    }
+
+    // ============================================================
+    // DELETE CONFESSION
+    //
+    // Author or admin. Cleans up comments (replies first due to the
+    // Restrict rule on ParentId) and orphaned reaction rows before
+    // removing the confession itself; shares, saved posts and
+    // hashtag links cascade in the database.
+    // ============================================================
+
+    // DELETE: api/v1/confessions/5
+    [Authorize]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteConfession(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdClaim =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        var userRoleClaim =
+            User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrWhiteSpace(userIdClaim) ||
+            !int.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized(new { message = "Invalid token claims." });
+        }
+
+        var isAdmin = userRoleClaim is nameof(UserRole.Admin) or nameof(UserRole.SuperAdmin);
+
+        var confession = await _context.Confessions
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new { c.Id, c.UserId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (confession is null)
+        {
+            return NotFound(new { message = $"Confession with ID {id} was not found." });
+        }
+
+        if (confession.UserId != userId && !isAdmin)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "You can only delete your own confessions." });
+        }
+
+        var commentIds = await _context.Comments
+            .Where(c => c.ConfessionId == id)
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+
+        if (commentIds.Count > 0)
+        {
+            await _context.Reactions
+                .Where(r =>
+                    r.ReactableType == "Comment" &&
+                    commentIds.Contains(r.ReactableId))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        // Replies must go first: Comment -> Parent is Restrict.
+
+        await _context.Comments
+            .Where(c => c.ConfessionId == id && c.ParentId != null)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await _context.Comments
+            .Where(c => c.ConfessionId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await _context.Reactions
+            .Where(r =>
+                r.ReactableType == "Confession" &&
+                r.ReactableId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await _context.SavedPosts
+            .Where(s => s.ConfessionId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await _context.Confessions
+            .Where(c => c.Id == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        return Ok(new { message = $"Confession {id} has been deleted." });
+    }
+
+    // ============================================================
     // CREATE CONFESSION
     // ============================================================
 

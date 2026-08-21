@@ -73,6 +73,19 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CacheService>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "WebApp",
+        policy =>
+            policy
+                .WithOrigins(
+                    "http://localhost:5173",
+                    "https://localhost:5173")
+                .AllowAnyHeader()
+                .AllowAnyMethod());
+});
+
 builder.Services
     .AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
@@ -212,6 +225,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+
+app.UseCors("WebApp");
 
 app.UseHttpsRedirection();
 
